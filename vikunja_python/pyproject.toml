@@ -1,0 +1,36 @@
+[project]
+name = "vikunja-python"
+version = "0.1.0"
+description = "API wrapper, CLI tool, and MCP server for Vikunja"
+authors = [
+    { name = "Your Name", email = "your.email@example.com" }
+]
+dependencies = [
+    "httpx>=0.27.0",
+    "pydantic>=2.0.0",
+    "dateparser>=1.2.0",
+    "typer>=0.12.0",
+    "fastmcp>=0.1.0",
+]
+requires-python = ">=3.13.12"
+license = { text = "WTFPL" }
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "testcontainers[mysql]>=4.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[project.scripts]
+vikunja = "vikunja_python.cli.main:app"
+vikunja-mcp = "vikunja_python.mcp.server:main"
+
