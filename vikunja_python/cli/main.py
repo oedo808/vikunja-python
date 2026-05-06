@@ -154,14 +154,18 @@ def delete_task(task_id: int):
     asyncio.run(_delete())
 
 @app.command()
-def update_task(task_id: int, title: Optional[str] = None, done: Optional[bool] = None):
+def update_task(task_id: int, title: Optional[str] = typer.Option(None, help="New title"), done: Optional[bool] = typer.Option(None, help="Completion status (use complete-task for easier usage)")):
     """Update a task's title or status."""
     async def _update():
         async with get_client() as client:
             payload = {}
             if title is not None: payload["title"] = title
             if done is not None: payload["done"] = done
-            
+
+            if not payload:
+                rprint("[bold yellow]No changes provided.[/bold yellow] Use --title or --done.")
+                return
+
             data = await client.request("POST", f"/tasks/{task_id}", json=payload)
             if isinstance(data, dict) and "error" in data:
                 rprint(f"[bold red]Error:[/bold red] {data['error']}")
@@ -169,6 +173,29 @@ def update_task(task_id: int, title: Optional[str] = None, done: Optional[bool] 
                 rprint(f"[bold green]Task {task_id} updated.[/bold green]")
     asyncio.run(_update())
 
+@app.command()
+def complete_task(task_id: int):
+    """Mark a task as completed."""
+    async def _complete():
+        async with get_client() as client:
+            data = await client.request("POST", f"/tasks/{task_id}", json={"done": True})
+            if isinstance(data, dict) and "error" in data:
+                rprint(f"[bold red]Error:[/bold red] {data['error']}")
+            else:
+                rprint(f"[bold green]Task {task_id} marked as completed.[/bold green]")
+    asyncio.run(_complete())
+
+@app.command()
+def mark_task_incomplete(task_id: int):
+    """Mark a task as incomplete."""
+    async def _incomplete():
+        async with get_client() as client:
+            data = await client.request("POST", f"/tasks/{task_id}", json={"done": False})
+            if isinstance(data, dict) and "error" in data:
+                rprint(f"[bold red]Error:[/bold red] {data['error']}")
+            else:
+                rprint(f"[bold green]Task {task_id} marked as incomplete.[/bold green]")
+    asyncio.run(_incomplete())
 @app.command()
 def list_buckets(project_id: int):
     """List buckets for a project (Requires JWT)."""

@@ -190,16 +190,46 @@ async def create_label(title: str, hex_color: Optional[str] = None, description:
 async def update_task(task_id: int, title: Optional[str] = None, done: Optional[bool] = None) -> str:
     """
     Update a task's title or completion status.
+    - task_id: The ID of the task to update.
+    - title: New title for the task.
+    - done: Completion status. Use complete_task(task_id) for a simpler way to mark as done.
     """
     async with get_client() as client:
         payload = {}
         if title is not None: payload["title"] = title
         if done is not None: payload["done"] = done
         
+        if not payload:
+            return "No changes provided for update_task. Provide 'title' or 'done'."
+
         data = await client.request("POST", f"/tasks/{task_id}", json=payload)
         if isinstance(data, dict) and "error" in data:
             return f"Error updating task: {data['error']}"
         return f"Successfully updated task {task_id}."
+
+@mcp.tool()
+async def complete_task(task_id: int) -> str:
+    """
+    Mark a task as completed (done = true).
+    """
+    async with get_client() as client:
+        payload = {"done": True}
+        data = await client.request("POST", f"/tasks/{task_id}", json=payload)
+        if isinstance(data, dict) and "error" in data:
+            return f"Error completing task: {data['error']}"
+        return f"Task {task_id} marked as completed."
+
+@mcp.tool()
+async def mark_task_incomplete(task_id: int) -> str:
+    """
+    Mark a task as incomplete (done = false).
+    """
+    async with get_client() as client:
+        payload = {"done": False}
+        data = await client.request("POST", f"/tasks/{task_id}", json=payload)
+        if isinstance(data, dict) and "error" in data:
+            return f"Error marking task as incomplete: {data['error']}"
+        return f"Task {task_id} marked as incomplete."
 
 @mcp.tool()
 async def delete_task(task_id: int) -> str:
