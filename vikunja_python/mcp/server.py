@@ -56,7 +56,8 @@ async def list_tasks(
             "per_page": per_page,
         }
         if filter:
-            params["filter"] = filter
+            # Strip extra quotes if provided by the model/MCP (Fixes 400 Bad Request)
+            params["filter"] = filter.strip('"\'')
         if expand:
             params["expand"] = expand
         if sort_by:
@@ -187,21 +188,19 @@ async def create_label(title: str, hex_color: Optional[str] = None, description:
         return f"Successfully created label '{label.title}' with ID {label.id}."
 
 @mcp.tool()
-async def update_task(task_id: int, title: Optional[str] = None, done: Optional[bool] = None) -> str:
+async def update_task(task_id: int, title: Optional[str] = None) -> str:
     """
-    Update a task's title or completion status.
+    Update a task's title.
     - task_id: The ID of the task to update.
     - title: New title for the task.
-    - done: Completion status. Use complete_task(task_id) for a simpler way to mark as done.
+    To mark a task as done, use complete_task(task_id).
+    To mark a task as incomplete, use mark_task_incomplete(task_id).
     """
     async with get_client() as client:
-        payload = {}
-        if title is not None: payload["title"] = title
-        if done is not None: payload["done"] = done
-        
-        if not payload:
-            return "No changes provided for update_task. Provide 'title' or 'done'."
+        if title is None:
+            return "No changes provided for update_task. Provide 'title'."
 
+        payload = {"title": title}
         data = await client.request("POST", f"/tasks/{task_id}", json=payload)
         if isinstance(data, dict) and "error" in data:
             return f"Error updating task: {data['error']}"
@@ -287,7 +286,9 @@ async def search_tasks(query: str) -> str:
     Search for tasks globally across all projects using a search string.
     """
     async with get_client() as client:
-        data = await client.request("GET", "/tasks", params={"s": query})
+        # Strip extra quotes if provided (Consistency fix)
+        clean_query = query.strip('"\'')
+        data = await client.request("GET", "/tasks", params={"s": clean_query})
         
         if isinstance(data, dict) and "error" in data:
             return f"Error searching tasks: {data['error']}"
