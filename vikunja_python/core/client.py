@@ -7,18 +7,23 @@ from pydantic import BaseModel, ConfigDict, Field
 
 # Set up logging for CLI/MCP
 def setup_logging(is_mcp: bool = False):
-    level = logging.INFO
+    # Support VIKUNJA_DEBUG=true or 1 to enable DEBUG logs
+    debug_val = os.getenv("VIKUNJA_DEBUG", "").lower()
+    level = logging.DEBUG if debug_val in ("1", "true", "yes", "on") else logging.INFO
+    
     if is_mcp:
         # MCP must log to stderr to avoid corrupting JSON-RPC on stdout
         logging.basicConfig(
             level=level,
             format="%(levelname)s: %(message)s",
-            stream=sys.stderr
+            stream=sys.stderr,
+            force=True  # Ensure we override any default handlers from libraries
         )
     else:
         logging.basicConfig(
             level=level,
-            format="%(levelname)s: %(message)s"
+            format="%(levelname)s: %(message)s",
+            force=True
         )
 
 class VikunjaClient:

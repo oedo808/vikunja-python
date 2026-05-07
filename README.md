@@ -28,6 +28,7 @@ Configure your Vikunja instance in a `.env` file or your shell:
 VIKUNJA_URL="https://your-vikunja-instance.com/api/v1"
 VIKUNJA_API_TOKEN="your_api_token_here"  # Recommended for MCP
 VIKUNJA_JWT_TOKEN="your_jwt_here"        # Required for Buckets/Reactions in CLI
+VIKUNJA_DEBUG="true"                     # Set to true or 1 to enable verbose stderr logging
 ```
 
 ## 🛠 Features & Tooling
