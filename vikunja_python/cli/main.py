@@ -154,17 +154,11 @@ def delete_task(task_id: int):
     asyncio.run(_delete())
 
 @app.command()
-def update_task(task_id: int, title: Optional[str] = typer.Option(None, help="New title"), done: Optional[bool] = typer.Option(None, help="Completion status (use complete-task for easier usage)")):
-    """Update a task's title or status."""
+def update_task(task_id: int, title: str = typer.Option(..., help="New title")):
+    """Update a task's title. Use complete-task or mark-task-incomplete for status changes."""
     async def _update():
         async with get_client() as client:
-            payload = {}
-            if title is not None: payload["title"] = title
-            if done is not None: payload["done"] = done
-
-            if not payload:
-                rprint("[bold yellow]No changes provided.[/bold yellow] Use --title or --done.")
-                return
+            payload = {"title": title}
 
             data = await client.request("POST", f"/tasks/{task_id}", json=payload)
             if isinstance(data, dict) and "error" in data:
