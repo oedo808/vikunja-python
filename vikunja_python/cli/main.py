@@ -35,7 +35,7 @@ def list_tasks(
     page: int = typer.Option(1, help="Page number"),
     per_page: int = typer.Option(20, help="Items per page"),
     filter: Optional[str] = typer.Option(None, help="Vikunja filter string"),
-    expand: Optional[List[str]] = typer.Option(None, help="Fields to expand (can be used multiple times)")
+    expand: Optional[List[str]] = typer.Option(None, help="Valid options ONLY: subtasks, buckets, reactions, comments, comment_count, is_unread, attachments, reminders")
 ):
     """List all tasks with pagination and optional filtering."""
     async def _list():
