@@ -15,10 +15,11 @@ load_dotenv()
 
 # Setup logging correctly for MCP
 setup_logging(is_mcp=True)
+debug_mode = os.getenv("VIKUNJA_DEBUG", "").lower() in ("1", "true", "yes", "on")
 
 # Initialize FastMCP server
 # Flat naming for small models: create_task, list_projects, etc.
-mcp = FastMCP("Vikunja")
+mcp = FastMCP("Vikunja", debug=debug_mode, log_level="DEBUG" if debug_mode else "INFO")
 
 def get_client() -> VikunjaClient:
     """Helper to initialize client from environment."""
