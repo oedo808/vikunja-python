@@ -37,8 +37,9 @@
 - **Scaffolding**: Generate random alpha username and 32-64 character alphanum password for ephemeral test instances.
 
 ## Logging
-- **Core**: Define a module-level logger (`logging.getLogger(__name__)`) and attach a `logging.NullHandler()`. Never configure log formats or output streams in `/core`.
+- **Core**: Use a centralized `setup_logging` function. When configuring the root logger, **ALWAYS** use `force=True` to ensure our logging configuration overrides any handlers set by underlying libraries (like uvicorn or fastmcp).
 - **MCP**: Explicitly configure the root logger to output exclusively to `sys.stderr` to avoid corrupting the MCP JSON-RPC protocol on `stdout`.
+- **Debug Flag**: Support a `VIKUNJA_DEBUG` environment variable. If set to `"1"`, `"true"`, `"yes"`, or `"on"` (case-insensitive), set the log level to `DEBUG`. Otherwise, default to `INFO`.
 - **Agentic Errors**: Return errors the LLM needs for self-correction as structured JSON in the tool's return payload.
 
 ## Style & Documentation

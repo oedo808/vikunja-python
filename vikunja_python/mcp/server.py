@@ -1,4 +1,5 @@
 import os
+import logging
 from typing import Optional, List
 from mcp.server.fastmcp import FastMCP
 from dotenv import load_dotenv
@@ -12,12 +13,12 @@ from vikunja_python.core.models.label import Label
 # Load .env if present
 load_dotenv()
 
+# Setup logging correctly for MCP
+setup_logging(is_mcp=True)
+
 # Initialize FastMCP server
 # Flat naming for small models: create_task, list_projects, etc.
 mcp = FastMCP("Vikunja")
-
-# Setup logging correctly for MCP
-setup_logging(is_mcp=True)
 
 def get_client() -> VikunjaClient:
     """Helper to initialize client from environment."""
@@ -26,8 +27,10 @@ def get_client() -> VikunjaClient:
     token = os.getenv("VIKUNJA_API_TOKEN")
     
     if not base_url or not token:
+        logging.error("VIKUNJA_URL and VIKUNJA_API_TOKEN must be set.")
         raise RuntimeError("VIKUNJA_URL and VIKUNJA_API_TOKEN must be set for MCP server.")
     
+    logging.debug(f"Initializing client for {base_url}")
     return VikunjaClient(base_url, token)
 
 @mcp.tool()
@@ -380,6 +383,7 @@ async def parse_date(date_string: str) -> str:
     return dt.isoformat()
 
 def main():
+    logging.info("Starting Vikunja MCP Server...")
     mcp.run()
 
 if __name__ == "__main__":
