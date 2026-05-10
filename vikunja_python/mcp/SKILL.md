@@ -22,11 +22,16 @@ This skill enables an AI agent to interact with the Vikunja task management syst
 4. **Deep Dive**: Use `list_task_comments(task_id=...)` to understand the history and rationale behind a task.
 
 ### Task Management
-- **Creation**: Use `create_task(title=..., project_id=...)`.
+- **Creation**: Use `create_task()` to make a new task. Supports advanced fields:
+  - `description`: Store Markdown context, configurations, or notes.
+  - `due_date`: Accepts natural language (e.g., "next Friday").
+  - `recurrence`: Accepts a dictionary (e.g., `{"frequency": "weekly", "interval": 1}`).
+- **Updates**: Use `update_task(task_id=...)` to modify existing tasks.
+  - You can update `title`, `description`, `due_date`, `priority`, `labels`, and `recurrence` in a single call.
+  - Omitted parameters are safely ignored (e.g., passing only `description` leaves the title unchanged).
+- **Completion**: Use `complete_task(task_id=...)` to mark as done, or `mark_task_incomplete(task_id=...)` to undo. (Do not use `update_task` for status changes).
 - **Labels**: Use `create_label(title=..., hex_color="#RRGGBB")` to create new tags.
 - **Bulk Setup**: Use `setup_new_project(title=..., tasks=[...])` to initialize a project with multiple tasks in one turn.
-- **Updates**: Use `update_task(task_id=..., title=...)` to change the title.
-- **Completion**: Use `complete_task(task_id=...)` to mark as done, or `mark_task_incomplete(task_id=...)` to undo.
 
 ### Hierarchies & Relationships
 - **Subtasks**: Use `add_subtask(parent_task_id=..., subtask_task_id=...)`.
