@@ -50,7 +50,7 @@ async def list_tasks(
     - page: Page number for pagination (default: 1).
     - per_page: Number of tasks per page (default: 20).
     - filter: Vikunja filter string (e.g., 'done = false').
-    - expand: List of fields to expand (e.g., ['subtasks', 'labels']).
+    - expand: List of fields to expand. Valid options ONLY: ['subtasks', 'buckets', 'reactions', 'comments', 'comment_count', 'is_unread', 'attachments', 'reminders']. Note: labels are included by default.
     - sort_by: List of fields to sort by (e.g., ['due_date', 'priority']).
     - order_by: Sort order, 'asc' or 'desc' (default: 'asc').
     """
@@ -63,7 +63,11 @@ async def list_tasks(
             # Strip extra quotes if provided by the model/MCP (Fixes 400 Bad Request)
             params["filter"] = filter.strip('"\'')
         if expand:
-            params["expand"] = expand
+            # Filter out invalid expand fields (e.g., 'labels' which is included by default)
+            valid_expands = {"subtasks", "buckets", "reactions", "comments", "comment_count", "is_unread", "attachments", "reminders"}
+            valid_requested = [e for e in expand if e in valid_expands]
+            if valid_requested:
+                params["expand"] = valid_requested
         if sort_by:
             params["sort_by"] = sort_by
         if order_by:

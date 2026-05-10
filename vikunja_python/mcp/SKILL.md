@@ -17,7 +17,7 @@ This skill enables an AI agent to interact with the Vikunja task management syst
 2. **Context Discovery**: Use `list_projects()` to understand the available buckets of work.
 3. **Task Listing**: Use `list_tasks()` for paginated, detailed retrieval. 
    - **Hierarchy**: Always use `expand=["subtasks"]` to see parent-child relationships.
-   - **Details**: Use `expand=["labels", "subtasks"]` to see all dates, labels, and sub-items in one call.
+   - **Details**: Use `expand=["subtasks", "comments"]` to see all dates, sub-items, and comments in one call. (Note: Labels are included automatically, do not add them to expand).
    - **Efficiency**: Use `per_page=50` to minimize round-trips for large projects.
 4. **Deep Dive**: Use `list_task_comments(task_id=...)` to understand the history and rationale behind a task.
 
@@ -25,7 +25,8 @@ This skill enables an AI agent to interact with the Vikunja task management syst
 - **Creation**: Use `create_task(title=..., project_id=...)`.
 - **Labels**: Use `create_label(title=..., hex_color="#RRGGBB")` to create new tags.
 - **Bulk Setup**: Use `setup_new_project(title=..., tasks=[...])` to initialize a project with multiple tasks in one turn.
-- **Updates**: Use `update_task(task_id=..., done=True/False)` to change status.
+- **Updates**: Use `update_task(task_id=..., title=...)` to change the title.
+- **Completion**: Use `complete_task(task_id=...)` to mark as done, or `mark_task_incomplete(task_id=...)` to undo.
 
 ### Hierarchies & Relationships
 - **Subtasks**: Use `add_subtask(parent_task_id=..., subtask_task_id=...)`.
