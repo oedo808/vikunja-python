@@ -122,6 +122,37 @@ async def list_tasks(
         return "\n".join(result)
 
 @mcp.tool()
+async def get_task(task_id: int) -> str:
+    """
+    Get the full details of a specific task, including its description and recurrence.
+    """
+    async with get_client() as client:
+        data = await client.request("GET", f"/tasks/{task_id}")
+        if isinstance(data, dict) and "error" in data:
+            return f"Error fetching task: {data['error']}"
+        
+        t = Task(**data)
+        
+        lines = []
+        status = "[DONE]" if t.done else "[TODO]"
+        lines.append(f"ID: {t.id} {status} {t.title}")
+        lines.append(f"Project ID: {t.project_id}")
+        if t.due_date: lines.append(f"Due: {t.due_date.isoformat()}")
+        if t.priority > 0: lines.append(f"Priority: {t.priority}")
+        if t.labels: lines.append(f"Labels: {', '.join(l.title for l in t.labels)}")
+        
+        # Recurrence
+        if t.repeat_after > 0:
+            lines.append(f"Recurrence: repeats after {t.repeat_after} seconds (Mode: {t.repeat_mode})")
+            
+        if t.description:
+            lines.append("\n--- Description ---")
+            lines.append(t.description)
+            lines.append("-------------------")
+            
+        return "\n".join(lines)
+
+@mcp.tool()
 async def create_task(
     title: str, 
     project_id: int, 

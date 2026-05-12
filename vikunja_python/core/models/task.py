@@ -230,7 +230,7 @@ class TaskListRequest(VikunjaBaseModel):
     # Expansion (fetch nested objects)
     expand: Optional[list[str]] = Field(
         None, 
-        description="Expand nested objects: subtasks, labels, buckets, reactions, comments, reminders, attachments"
+        description="Expand nested objects. Valid options ONLY: subtasks, buckets, reactions, comments, comment_count, is_unread, attachments, reminders"
     )
 
 

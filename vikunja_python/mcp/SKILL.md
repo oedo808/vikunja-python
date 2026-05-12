@@ -15,11 +15,12 @@ This skill enables an AI agent to interact with the Vikunja task management syst
 ### Finding Information
 1. **Search First**: Use `search_tasks(query="...")` to find tasks by title across the entire system.
 2. **Context Discovery**: Use `list_projects()` to understand the available buckets of work.
-3. **Task Listing**: Use `list_tasks()` for paginated, detailed retrieval. 
+3. **Task Listing (Summaries)**: Use `list_tasks()` for paginated retrieval. 
    - **Hierarchy**: Always use `expand=["subtasks"]` to see parent-child relationships.
    - **Details**: Use `expand=["subtasks", "comments"]` to see all dates, sub-items, and comments in one call. (Note: Labels are included automatically, do not add them to expand).
    - **Efficiency**: Use `per_page=50` to minimize round-trips for large projects.
-4. **Deep Dive**: Use `list_task_comments(task_id=...)` to understand the history and rationale behind a task.
+4. **Full Task Details**: Use `get_task(task_id=...)` to retrieve the complete metadata for a single task, including its **full description** and recurrence settings. (`list_tasks` only returns summaries).
+5. **Deep Dive**: Use `list_task_comments(task_id=...)` to understand the history and rationale behind a task.
 
 ### Task Management
 - **Creation**: Use `create_task()` to make a new task. Supports advanced fields:
