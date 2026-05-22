@@ -24,6 +24,7 @@
 ## MCP Skill & Guidance
 - **SKILL.md**: Maintain a high-signal `SKILL.md` in `/vikunja_python/mcp/` that explains tool usage patterns and operational procedures for downstream LLMs.
 - **Guidance**: When modifying MCP tools, ensure the `SKILL.md` is updated to reflect the most efficient interaction patterns (e.g., preferring search over listing).
+- **Validation**: Every update to MCP tool docstrings or parameter annotations MUST be validated using the "Clean-Room Subagent" workflow defined in `.ai/mcp_validation.md`. This ensures discoverability and token efficiency.
 
 ## Maintenance & Operations Workflow
 - **API Spec Updates**:

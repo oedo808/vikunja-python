@@ -114,3 +114,52 @@ async def test_expand_parameter_sanitization(async_client, vikunja_auth):
     result2 = await list_tasks(project_id=project_id, expand=["labels", "invalid_field"])
     assert "Error fetching tasks" not in result2
     assert "No tasks found" in result2 or "ID:" in result2
+
+@pytest.mark.asyncio
+async def test_invalid_expand_sanitization_v2(async_client, vikunja_auth):
+    """
+    Explicitly verify that 'attachments', 'reminders', and 'assignees' 
+    are sanitized out to prevent 412 errors.
+    """
+    from vikunja_python.mcp.server import list_tasks
+    import os
+    
+    os.environ["VIKUNJA_URL"] = vikunja_auth["base_url"]
+    os.environ["VIKUNJA_API_TOKEN"] = vikunja_auth["token"]
+    
+    # These three specifically caused 412 errors in the wild
+    invalid_expands = ["attachments", "reminders", "assignees"]
+    
+    # Call tool with these invalid expands
+    # If sanitization fails, the API will return 412 and the tool will return an error string.
+    result = await list_tasks(expand=invalid_expands)
+    
+    assert "Error fetching tasks: 412" not in result
+    assert "Error fetching tasks" not in result
+
+@pytest.mark.asyncio
+async def test_get_task_expansion_integration(async_client, vikunja_auth):
+    """Verify that get_task supports full expansion including attachments/reminders."""
+    from vikunja_python.mcp.server import get_task
+    import os
+    
+    os.environ["VIKUNJA_URL"] = vikunja_auth["base_url"]
+    os.environ["VIKUNJA_API_TOKEN"] = vikunja_auth["token"]
+
+    # 1. Create a task with a description
+    proj_resp = await async_client.put("/projects", json={"title": "GetTask Project"})
+    project_id = proj_resp.json()["id"]
+    task_resp = await async_client.put(f"/projects/{project_id}/tasks", json={"title": "Detailed Task", "description": "Full details here"})
+    task_id = task_resp.json()["id"]
+    
+    # 2. Test get_task with expansion
+    # Note: We can't easily upload attachments in this test without more setup, 
+    # but we can verify the API call doesn't 412.
+    result = await get_task(task_id=task_id, expand=["attachments", "reminders", "assignees", "comments"])
+    
+    assert "Error fetching task" not in result
+    assert "ID: " in result
+    assert "Full details here" in result
+    assert "Detailed Task" in result
+
+

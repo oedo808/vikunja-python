@@ -42,13 +42,13 @@ class Task(VikunjaBaseModel):
     title: str = Field(..., max_length=255, description="Task title (required)")
     description: Optional[str] = Field(None, max_length=10000, description="Task description (markdown)")
     identifier: str = Field(..., description="Task identifier within project (e.g., '#1')")
-    index: int = Field(0, description="Task index for ordering within view/bucket")
+    index: float = Field(0.0, description="Task index for ordering within view/bucket")
     project_id: int = Field(..., description="Parent project ID")
     
     # Status Fields (3 fields)
     done: bool = Field(False, description="Completion status")
     done_at: Optional[datetime] = Field(None, description="Timestamp when task was marked done")
-    percent_done: int = Field(0, ge=0, le=100, description="Completion percentage (0-100)")
+    percent_done: float = Field(0.0, ge=0.0, le=100.0, description="Completion percentage (0-100)")
     
     # Priority & Importance (3 fields)
     priority: int = Field(0, ge=0, le=5, description="Task priority (0-5, higher = more important)")
@@ -70,7 +70,7 @@ class Task(VikunjaBaseModel):
     
     # Positioning Fields (3 fields) - For Kanban/board views
     bucket_id: int = Field(0, description="Bucket ID in board view")
-    position: int = Field(0, description="Position within bucket")
+    position: float = Field(0.0, description="Position within bucket")
     
     # Nested Objects (4 fields)
     assignees: Optional[list[User]] = Field(default_factory=list, description="Users assigned to this task")
@@ -86,6 +86,11 @@ class Task(VikunjaBaseModel):
     
     # Custom Fields (1 field) - UNKNOWN: Full structure not verified
     custom_fields: Optional[dict[str, Any]] = Field(None, description="Custom field values")
+    
+    # Expanded Fields (not in base task summary, but available via expand)
+    comment_count: Optional[int] = Field(None, description="Count of comments on this task")
+    is_unread: Optional[bool] = Field(None, description="Whether the task is unread for the current user")
+    buckets: Optional[list[dict[str, Any]]] = Field(None, description="Kanban buckets this task belongs to")
     
     @model_validator(mode='after')
     def populate_subtasks_from_relations(self) -> 'Task':
@@ -182,7 +187,7 @@ class TaskUpdateRequest(VikunjaBaseModel):
     due_date: Optional[datetime] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
-    percent_done: Optional[int] = Field(None, ge=0, le=100)
+    percent_done: Optional[float] = Field(None, ge=0.0, le=100.0)
     is_favorite: Optional[bool] = None
     hex_color: Optional[str] = None
     
@@ -192,7 +197,7 @@ class TaskUpdateRequest(VikunjaBaseModel):
     
     # Positioning
     bucket_id: Optional[int] = None
-    position: Optional[int] = None
+    position: Optional[float] = None
     
     def model_dump_for_api(self) -> dict:
         """Convert to dict, excluding None values."""
@@ -230,7 +235,12 @@ class TaskListRequest(VikunjaBaseModel):
     # Expansion (fetch nested objects)
     expand: Optional[list[str]] = Field(
         None, 
-        description="Expand nested objects. Valid options ONLY: subtasks, buckets, reactions, comments, comment_count, is_unread, attachments, reminders"
+        description=(
+            "Expand nested objects to include metadata in summaries. "
+            "Valid: subtasks, comments, reactions, buckets, comment_count, is_unread. "
+            "Invalid (412): attachments, reminders, assignees — explicitly marked as do-not-use for listing. "
+            "Note: list_tasks() returns summaries only (no full descriptions). Use get_task() for full details."
+        )
     )
 
 
