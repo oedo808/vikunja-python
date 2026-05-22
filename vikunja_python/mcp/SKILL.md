@@ -16,11 +16,15 @@ This skill enables an AI agent to interact with the Vikunja task management syst
 1. **Search First**: Use `search_tasks(query="...")` to find tasks by title across the entire system.
 2. **Context Discovery**: Use `list_projects()` to understand the available buckets of work.
 3. **Task Listing (Summaries)**: Use `list_tasks()` for paginated retrieval. 
-   - **Hierarchy**: Always use `expand=["subtasks"]` to see parent-child relationships.
-   - **Details**: Use `expand=["subtasks", "comments", "attachments"]` to see all dates, sub-items, comments, and file attachments in one call. (Note: Labels are included automatically, do not add them to expand).
+   - **Expansion Options**: `subtasks`, `comments`, `reactions`, `buckets`, `comment_count`, `is_unread`.
+   - **Note**: `list_tasks()` returns basic metadata and a **description preview**.
    - **Efficiency**: Use `per_page=50` to minimize round-trips for large projects.
-4. **Full Task Details**: Use `get_task(task_id=...)` to retrieve the complete metadata for a single task, including its **full description** and recurrence settings. (`list_tasks` only returns summaries).
-5. **Deep Dive**: Use `list_task_comments(task_id=...)` to understand the history and rationale behind a task.
+4. **Project Deep-Dive (Bulk Details)**: For full metadata (descriptions, assignees, buckets) across many tasks at once:
+   - Step 1: `get_project(project_id=...)` to find view IDs.
+   - Step 2: `list_project_view_tasks(project_id=..., view_id=...)` to get comprehensive data.
+5. **Single Task Details**: Use `get_task(task_id=...)` for a complete deep-dive into a single task, including **attachments** and **reminders**.
+   - **Expansions**: Use `expand=["attachments", "reminders", "assignees", "comments"]` to ensure all metadata is fetched.
+6. **Interaction History**: Use `list_task_comments(task_id=...)` to understand the rationale behind a task.
 
 ### Task Management
 - **Creation**: Use `create_task()` to make a new task. Supports advanced fields:

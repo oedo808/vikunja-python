@@ -41,27 +41,27 @@ async def list_tasks(
     page: int = 1,
     per_page: int = 20,
     filter: Optional[str] = None,
-    expand: Annotated[Optional[List[str]], Field(description="Fields to expand in the response. Valid options: subtasks, buckets, reactions, comments, comment_count, is_unread, attachments, reminders, assignees. Note: labels are included by default.")] = None,
+    expand: Annotated[Optional[List[str]], Field(description=(
+        "Fields to expand in the response. "
+        "Valid: subtasks, comments, reactions, buckets, comment_count, is_unread. "
+        "Note: attachments and reminders are often better fetched via get_task() or project view listing."
+    ))] = None,
     sort_by: Optional[List[str]] = None,
     order_by: Optional[str] = None,
 ) -> str:
     """
-    List tasks from Vikunja with pagination and detailed information.
+    List tasks from Vikunja with pagination.
     - project_id: Optional ID of the project to list tasks from.
     - page: Page number for pagination (default: 1).
     - per_page: Number of tasks per page (default: 20).
     - filter: Vikunja filter string (e.g., 'done = false').
-    - expand: List of fields to expand.
-        - 'subtasks': Include child tasks.
-        - 'comments': Include all task comments.
-        - 'attachments': Include file attachment metadata.
-        - 'reminders': Include configured reminders.
+    - expand: List of fields to expand. 
+        - 'subtasks': Include child tasks in hierarchy.
+        - 'comments': Include first 50 comments.
         - 'reactions': Include emoji reactions.
-        - 'buckets': Include Kanban bucket information.
-        - 'assignees': Include full user objects for assignees.
+        - 'buckets': Include Kanban bucket info.
         - 'comment_count': Include numeric count of comments.
         - 'is_unread': Include unread status for the current user.
-      Note: labels are included by default.
     - sort_by: List of fields to sort by (e.g., ['due_date', 'priority']).
     - order_by: Sort order, 'asc' or 'desc' (default: 'asc').
     """
@@ -74,8 +74,8 @@ async def list_tasks(
             # Strip extra quotes if provided by the model/MCP (Fixes 400 Bad Request)
             params["filter"] = filter.strip('"\'')
         if expand:
-            # Filter out invalid expand fields (e.g., 'labels' which is included by default)
-            valid_expands = {"subtasks", "buckets", "reactions", "comments", "comment_count", "is_unread", "attachments", "reminders", "assignees"}
+            # Filter out invalid expand fields for this endpoint to avoid 412 errors
+            valid_expands = {"subtasks", "buckets", "reactions", "comments", "comment_count", "is_unread"}
             valid_requested = [e for e in expand if e in valid_expands]
             if valid_requested:
                 params["expand"] = valid_requested
@@ -104,9 +104,27 @@ async def list_tasks(
             labels_list = t.labels or []
             labels_str = f" [Labels: {', '.join(l.title for l in labels_list)}]" if labels_list else ""
             
+            assignees_str = f" [Assignees: {', '.join(u.username for u in t.assignees)}]" if t.assignees else ""
+            
             priority = f" [P{t.priority}]" if t.priority > 0 else ""
             
-            line = f"{prefix}ID: {t.id} {status} {t.title}{priority}{due}{labels_str}"
+            # Expanded info
+            extra = []
+            if t.comment_count is not None: extra.append(f"{t.comment_count} comments")
+            if t.reactions: 
+                extra.append(f"{len(t.reactions)} reactions")
+            if t.buckets:
+                extra.append(f"Buckets: {', '.join(b.get('title', 'Unknown') if isinstance(b, dict) else str(b) for b in t.buckets)}")
+            
+            extra_str = f" ({', '.join(extra)})" if extra else ""
+            
+            line = f"{prefix}ID: {t.id} {status} {t.title}{priority}{due}{labels_str}{assignees_str}{extra_str}"
+            if t.description and len(t.description) > 0:
+                # Show first line of description if it's long, or full if short
+                desc_preview = t.description.split('\n')[0]
+                if len(desc_preview) > 100: desc_preview = desc_preview[:97] + "..."
+                line += f"\n{prefix}  Desc: {desc_preview}"
+
             lines = [line]
             
             subtasks_list = t.subtasks or []
@@ -133,12 +151,133 @@ async def list_tasks(
         return "\n".join(result)
 
 @mcp.tool()
-async def get_task(task_id: int) -> str:
+async def get_project(project_id: int) -> str:
     """
-    Get the full details of a specific task, including its description and recurrence.
+    Get detailed information about a project, including its views.
+    Use this to find view IDs for list_project_view_tasks().
     """
     async with get_client() as client:
-        data = await client.request("GET", f"/tasks/{task_id}")
+        data = await client.request("GET", f"/projects/{project_id}")
+        if isinstance(data, dict) and "error" in data:
+            return f"Error fetching project: {data['error']}"
+        
+        p = Project(**data)
+        lines = [f"ID: {p.id} - Title: {p.title}"]
+        if p.description: lines.append(f"Description: {p.description}")
+        
+        if p.views:
+            lines.append("\nViews:")
+            for v in p.views:
+                kind = v.get('view_kind', 'unknown') if isinstance(v, dict) else 'unknown'
+                v_id = v.get('id', '?') if isinstance(v, dict) else '?'
+                v_title = v.get('title', 'Untitled') if isinstance(v, dict) else 'Untitled'
+                lines.append(f"  - {v_title} (ID: {v_id}, Kind: {kind})")
+        
+        return "\n".join(lines)
+
+@mcp.tool()
+async def list_project_view_tasks(
+    project_id: int,
+    view_id: int,
+    page: int = 1,
+    per_page: int = 50,
+    expand: Annotated[Optional[List[str]], Field(description=(
+        "Fields to expand. Valid: subtasks, comments, reactions, buckets, comment_count, is_unread. "
+        "This endpoint often returns more metadata (like descriptions) by default."
+    ))] = None
+) -> str:
+    """
+    List tasks for a specific project view. 
+    This is often the most comprehensive way to list tasks with descriptions and full metadata in bulk.
+    """
+    async with get_client() as client:
+        params = {"page": page, "per_page": per_page}
+        if expand:
+            params["expand"] = expand
+            
+        data = await client.request("GET", f"/projects/{project_id}/views/{view_id}/tasks", params=params)
+        
+        if isinstance(data, dict) and "error" in data:
+            return f"Error fetching view tasks: {data['error']}"
+        
+        if not data:
+            return "No tasks found in this view."
+
+        all_tasks = []
+        if isinstance(data, list) and len(data) > 0:
+            first_item = data[0]
+            if "tasks" in first_item and "id" in first_item and "title" in first_item:
+                # It's a list of buckets (Kanban view)
+                for bucket in data:
+                    b_tasks = bucket.get("tasks") or []
+                    for t_item in b_tasks:
+                        t_item["_bucket_title"] = bucket.get("title")
+                        all_tasks.append(Task(**t_item))
+            else:
+                # It's a list of tasks
+                all_tasks = [Task(**item) for item in data]
+
+        if not all_tasks:
+            return "No tasks found in this view."
+
+        result = []
+        def format_task_rich(t: Task) -> str:
+            status = "[DONE]" if t.done else "[TODO]"
+            due = f" (Due: {t.due_date.strftime('%Y-%m-%d %H:%M')})" if t.due_date else ""
+            labels = f" [Labels: {', '.join(l.title for l in t.labels)}]" if t.labels else ""
+            assignees = f" [Assignees: {', '.join(u.username for u in t.assignees)}]" if t.assignees else ""
+            bucket = f" [Bucket: {t_item.get('_bucket_title', 'Unknown')}]" if '_bucket_title' in t.model_extra or hasattr(t, '_bucket_title') else ""
+            # Re-check for internal bucket info injected during parsing
+            
+            line = f"ID: {t.id} {status} {t.title}{due}{labels}{assignees}"
+            if t.description:
+                line += f"\n  Desc: {t.description.replace('\n', '\n  ')}"
+            return line
+
+        for t in all_tasks:
+            result.append(format_task_rich(t))
+            
+        return "\n\n".join(result)
+
+@mcp.tool()
+async def get_task(
+    task_id: int,
+    expand: Annotated[Optional[List[str]], Field(description=(
+        "Fields to expand for full details. Valid: subtasks, comments, attachments, reminders, assignees, reactions, buckets. "
+        "Use this for a deep-dive into a single task."
+    ))] = None
+) -> str:
+    """
+    Get the full details of a specific task, including its description, recurrence, and all metadata.
+    Use this for fetching 'attachments', 'reminders', and 'assignees' which are unavailable in list_tasks().
+    """
+    async with get_client() as client:
+        # 1. Try with expansion
+        params = {}
+        if expand:
+            params["expand"] = expand
+            
+        data = await client.request("GET", f"/tasks/{task_id}", params=params)
+        
+        # 2. Fallback if 412 (Precondition Failed) - Some servers don't support certain expansions
+        if isinstance(data, dict) and "error" in data and "412" in str(data["error"]):
+            logging.warning(f"Task expansion failed with 412 for task {task_id}, falling back to manual fetch.")
+            data = await client.request("GET", f"/tasks/{task_id}")
+            if isinstance(data, dict) and "error" in data:
+                return f"Error fetching task: {data['error']}"
+            
+            # If expansion was requested, try manual fetch for known sub-resources
+            if expand:
+                if "assignees" in expand:
+                    assignees = await client.request("GET", f"/tasks/{task_id}/assignees")
+                    if isinstance(assignees, list): data["assignees"] = assignees
+                if "attachments" in expand:
+                    attachments = await client.request("GET", f"/tasks/{task_id}/attachments")
+                    if isinstance(attachments, list): data["attachments"] = attachments
+                if "comments" in expand:
+                    comments = await client.request("GET", f"/tasks/{task_id}/comments")
+                    if isinstance(comments, list): data["comments"] = comments
+
         if isinstance(data, dict) and "error" in data:
             return f"Error fetching task: {data['error']}"
         
@@ -148,10 +287,19 @@ async def get_task(task_id: int) -> str:
         status = "[DONE]" if t.done else "[TODO]"
         lines.append(f"ID: {t.id} {status} {t.title}")
         lines.append(f"Project ID: {t.project_id}")
+        lines.append(f"Identifier: {t.identifier}")
         if t.due_date: lines.append(f"Due: {t.due_date.isoformat()}")
         if t.priority > 0: lines.append(f"Priority: {t.priority}")
-        if t.labels: lines.append(f"Labels: {', '.join(l.title for l in t.labels)}")
         
+        if t.labels: 
+            lines.append(f"Labels: {', '.join(l.title for l in t.labels)}")
+            
+        if t.assignees:
+            lines.append(f"Assignees: {', '.join(u.username for u in t.assignees)}")
+        
+        if t.reactions:
+            lines.append(f"Reactions: {len(t.reactions)} total")
+
         # Recurrence
         if t.repeat_after > 0:
             lines.append(f"Recurrence: repeats after {t.repeat_after} seconds (Mode: {t.repeat_mode})")
@@ -161,6 +309,22 @@ async def get_task(task_id: int) -> str:
             lines.append(t.description)
             lines.append("-------------------")
             
+        # Attachments/Reminders summaries
+        if t.attachments:
+            lines.append(f"\nAttachments ({len(t.attachments)}):")
+            for att in t.attachments:
+                name = "Unknown"
+                if isinstance(att, dict):
+                    name = att.get("file", {}).get("name") or att.get("name") or "Unnamed"
+                lines.append(f"  - {name} (ID: {att.get('id') if isinstance(att, dict) else '?'})")
+        
+        if t.reminders:
+            lines.append(f"\nReminders ({len(t.reminders)}):")
+            for rem in t.reminders:
+                if isinstance(rem, dict):
+                    rem_time = rem.get("reminder") or f"Relative to {rem.get('relative_to')} ({rem.get('relative_period')}s)"
+                    lines.append(f"  - {rem_time}")
+
         return "\n".join(lines)
 
 @mcp.tool()

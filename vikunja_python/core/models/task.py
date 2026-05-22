@@ -87,6 +87,11 @@ class Task(VikunjaBaseModel):
     # Custom Fields (1 field) - UNKNOWN: Full structure not verified
     custom_fields: Optional[dict[str, Any]] = Field(None, description="Custom field values")
     
+    # Expanded Fields (not in base task summary, but available via expand)
+    comment_count: Optional[int] = Field(None, description="Count of comments on this task")
+    is_unread: Optional[bool] = Field(None, description="Whether the task is unread for the current user")
+    buckets: Optional[list[dict[str, Any]]] = Field(None, description="Kanban buckets this task belongs to")
+    
     @model_validator(mode='after')
     def populate_subtasks_from_relations(self) -> 'Task':
         """Populate subtasks field from related_tasks['subtask'] if expanded."""
@@ -231,17 +236,10 @@ class TaskListRequest(VikunjaBaseModel):
     expand: Optional[list[str]] = Field(
         None, 
         description=(
-            "Expand nested objects to include full metadata instead of just IDs. "
-            "Valid options: "
-            "subtasks (include child tasks), "
-            "comments (include all task comments), "
-            "attachments (include file metadata), "
-            "reminders (include task reminders), "
-            "reactions (include emoji reactions), "
-            "buckets (include Kanban bucket info), "
-            "assignees (include full user objects for assignees), "
-            "comment_count (include numeric count of comments), "
-            "is_unread (include unread status for current user)."
+            "Expand nested objects to include metadata in summaries. "
+            "Valid: subtasks, comments, reactions, buckets, comment_count, is_unread. "
+            "Invalid (412): attachments, reminders, assignees — explicitly marked as do-not-use for listing. "
+            "Note: list_tasks() returns summaries only (no full descriptions). Use get_task() for full details."
         )
     )
 
