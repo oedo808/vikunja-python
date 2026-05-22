@@ -168,10 +168,8 @@ async def get_project(project_id: int) -> str:
         if p.views:
             lines.append("\nViews:")
             for v in p.views:
-                kind = v.get('view_kind', 'unknown') if isinstance(v, dict) else 'unknown'
-                v_id = v.get('id', '?') if isinstance(v, dict) else '?'
-                v_title = v.get('title', 'Untitled') if isinstance(v, dict) else 'Untitled'
-                lines.append(f"  - {v_title} (ID: {v_id}, Kind: {kind})")
+                # v is a ProjectView model object
+                lines.append(f"  - {v.title} (ID: {v.id}, Kind: {v.view_kind})")
         
         return "\n".join(lines)
 
@@ -211,6 +209,7 @@ async def list_project_view_tasks(
                 for bucket in data:
                     b_tasks = bucket.get("tasks") or []
                     for t_item in b_tasks:
+                        # Inject bucket title for context
                         t_item["_bucket_title"] = bucket.get("title")
                         all_tasks.append(Task(**t_item))
             else:
@@ -226,10 +225,12 @@ async def list_project_view_tasks(
             due = f" (Due: {t.due_date.strftime('%Y-%m-%d %H:%M')})" if t.due_date else ""
             labels = f" [Labels: {', '.join(l.title for l in t.labels)}]" if t.labels else ""
             assignees = f" [Assignees: {', '.join(u.username for u in t.assignees)}]" if t.assignees else ""
-            bucket = f" [Bucket: {t_item.get('_bucket_title', 'Unknown')}]" if '_bucket_title' in t.model_extra or hasattr(t, '_bucket_title') else ""
-            # Re-check for internal bucket info injected during parsing
             
-            line = f"ID: {t.id} {status} {t.title}{due}{labels}{assignees}"
+            # Check for injected bucket title in model_extra
+            bucket_title = t.model_extra.get("_bucket_title") if t.model_extra else None
+            bucket = f" [Bucket: {bucket_title}]" if bucket_title else ""
+            
+            line = f"ID: {t.id} {status} {t.title}{due}{labels}{assignees}{bucket}"
             if t.description:
                 line += f"\n  Desc: {t.description.replace('\n', '\n  ')}"
             return line
