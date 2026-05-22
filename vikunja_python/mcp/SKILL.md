@@ -15,13 +15,14 @@ This skill enables an AI agent to interact with the Vikunja task management syst
 ### Finding Information
 1. **Search First**: Use `search_tasks(query="...")` to find tasks by title across the entire system.
 2. **Context Discovery**: Use `list_projects()` to understand the available buckets of work.
-3. **Task Listing (Summaries)**: Use `list_tasks()` for paginated retrieval. 
+3. **Task Listing**: Use `list_tasks()` for paginated retrieval. 
+   - **Optimization**: Use `include_descriptions=False` for bulk administrative tasks to save tokens.
    - **Expansion Options**: `subtasks`, `comments`, `reactions`, `buckets`, `comment_count`, `is_unread`.
-   - **Note**: `list_tasks()` returns basic metadata and a **description preview**.
    - **Efficiency**: Use `per_page=50` to minimize round-trips for large projects.
-4. **Project Deep-Dive (Bulk Details)**: For full metadata (descriptions, assignees, buckets) across many tasks at once:
+4. **Project Deep-Dive**: For bulk metadata across a project:
    - Step 1: `get_project(project_id=...)` to find view IDs.
-   - Step 2: `list_project_view_tasks(project_id=..., view_id=...)` to get comprehensive data.
+   - Step 2: `list_project_view_tasks(project_id=..., view_id=...)` for comprehensive data.
+   - **Optimization**: Supports `include_descriptions=False` if needed.
 5. **Single Task Details**: Use `get_task(task_id=...)` for a complete deep-dive into a single task, including **attachments** and **reminders**.
    - **Expansions**: Use `expand=["attachments", "reminders", "assignees", "comments"]` to ensure all metadata is fetched.
 6. **Interaction History**: Use `list_task_comments(task_id=...)` to understand the rationale behind a task.

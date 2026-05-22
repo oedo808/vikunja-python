@@ -42,13 +42,13 @@ class Task(VikunjaBaseModel):
     title: str = Field(..., max_length=255, description="Task title (required)")
     description: Optional[str] = Field(None, max_length=10000, description="Task description (markdown)")
     identifier: str = Field(..., description="Task identifier within project (e.g., '#1')")
-    index: int = Field(0, description="Task index for ordering within view/bucket")
+    index: float = Field(0.0, description="Task index for ordering within view/bucket")
     project_id: int = Field(..., description="Parent project ID")
     
     # Status Fields (3 fields)
     done: bool = Field(False, description="Completion status")
     done_at: Optional[datetime] = Field(None, description="Timestamp when task was marked done")
-    percent_done: int = Field(0, ge=0, le=100, description="Completion percentage (0-100)")
+    percent_done: float = Field(0.0, ge=0.0, le=100.0, description="Completion percentage (0-100)")
     
     # Priority & Importance (3 fields)
     priority: int = Field(0, ge=0, le=5, description="Task priority (0-5, higher = more important)")
@@ -70,7 +70,7 @@ class Task(VikunjaBaseModel):
     
     # Positioning Fields (3 fields) - For Kanban/board views
     bucket_id: int = Field(0, description="Bucket ID in board view")
-    position: int = Field(0, description="Position within bucket")
+    position: float = Field(0.0, description="Position within bucket")
     
     # Nested Objects (4 fields)
     assignees: Optional[list[User]] = Field(default_factory=list, description="Users assigned to this task")
@@ -187,7 +187,7 @@ class TaskUpdateRequest(VikunjaBaseModel):
     due_date: Optional[datetime] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
-    percent_done: Optional[int] = Field(None, ge=0, le=100)
+    percent_done: Optional[float] = Field(None, ge=0.0, le=100.0)
     is_favorite: Optional[bool] = None
     hex_color: Optional[str] = None
     
@@ -197,7 +197,7 @@ class TaskUpdateRequest(VikunjaBaseModel):
     
     # Positioning
     bucket_id: Optional[int] = None
-    position: Optional[int] = None
+    position: Optional[float] = None
     
     def model_dump_for_api(self) -> dict:
         """Convert to dict, excluding None values."""

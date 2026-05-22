@@ -37,34 +37,20 @@ def get_client() -> VikunjaClient:
 
 @mcp.tool()
 async def list_tasks(
-    project_id: Optional[int] = None,
-    page: int = 1,
-    per_page: int = 20,
-    filter: Optional[str] = None,
+    project_id: Annotated[Optional[int], Field(description="Optional ID of the project to list tasks from")] = None,
+    include_descriptions: Annotated[bool, Field(description="Include full task descriptions. Set to False for bulk operations to save tokens.")] = True,
+    page: Annotated[int, Field(description="Page number for pagination (default: 1)")] = 1,
+    per_page: Annotated[int, Field(description="Number of tasks per page (default: 20)")] = 20,
+    filter: Annotated[Optional[str], Field(description="Vikunja filter string (e.g., 'done = false')")] = None,
     expand: Annotated[Optional[List[str]], Field(description=(
         "Fields to expand in the response. "
         "Valid: subtasks, comments, reactions, buckets, comment_count, is_unread. "
         "Note: attachments and reminders are often better fetched via get_task() or project view listing."
     ))] = None,
-    sort_by: Optional[List[str]] = None,
-    order_by: Optional[str] = None,
+    sort_by: Annotated[Optional[List[str]], Field(description="List of fields to sort by (e.g., ['due_date', 'priority'])")] = None,
+    order_by: Annotated[Optional[str], Field(description="Sort order, 'asc' or 'desc' (default: 'asc')")] = None,
 ) -> str:
-    """
-    List tasks from Vikunja with pagination.
-    - project_id: Optional ID of the project to list tasks from.
-    - page: Page number for pagination (default: 1).
-    - per_page: Number of tasks per page (default: 20).
-    - filter: Vikunja filter string (e.g., 'done = false').
-    - expand: List of fields to expand. 
-        - 'subtasks': Include child tasks in hierarchy.
-        - 'comments': Include first 50 comments.
-        - 'reactions': Include emoji reactions.
-        - 'buckets': Include Kanban bucket info.
-        - 'comment_count': Include numeric count of comments.
-        - 'is_unread': Include unread status for the current user.
-    - sort_by: List of fields to sort by (e.g., ['due_date', 'priority']).
-    - order_by: Sort order, 'asc' or 'desc' (default: 'asc').
-    """
+    """List tasks from Vikunja with pagination."""
     async with get_client() as client:
         params = {
             "page": page,
@@ -119,11 +105,10 @@ async def list_tasks(
             extra_str = f" ({', '.join(extra)})" if extra else ""
             
             line = f"{prefix}ID: {t.id} {status} {t.title}{priority}{due}{labels_str}{assignees_str}{extra_str}"
-            if t.description and len(t.description) > 0:
-                # Show first line of description if it's long, or full if short
-                desc_preview = t.description.split('\n')[0]
-                if len(desc_preview) > 100: desc_preview = desc_preview[:97] + "..."
-                line += f"\n{prefix}  Desc: {desc_preview}"
+            if include_descriptions and t.description:
+                # Include full description with indentation
+                desc_indented = t.description.replace('\n', f'\n{prefix}  ')
+                line += f"\n{prefix}  Desc: {desc_indented}"
 
             lines = [line]
             
@@ -151,11 +136,8 @@ async def list_tasks(
         return "\n".join(result)
 
 @mcp.tool()
-async def get_project(project_id: int) -> str:
-    """
-    Get detailed information about a project, including its views.
-    Use this to find view IDs for list_project_view_tasks().
-    """
+async def get_project(project_id: Annotated[int, Field(description="The ID of the project to fetch")]) -> str:
+    """Get detailed information about a project, including its views."""
     async with get_client() as client:
         data = await client.request("GET", f"/projects/{project_id}")
         if isinstance(data, dict) and "error" in data:
@@ -175,19 +157,17 @@ async def get_project(project_id: int) -> str:
 
 @mcp.tool()
 async def list_project_view_tasks(
-    project_id: int,
-    view_id: int,
-    page: int = 1,
-    per_page: int = 50,
+    project_id: Annotated[int, Field(description="ID of the project")],
+    view_id: Annotated[int, Field(description="ID of the view")],
+    include_descriptions: Annotated[bool, Field(description="Include full task descriptions. Set to False for bulk operations to save tokens.")] = True,
+    page: Annotated[int, Field(description="Page number (default: 1)")] = 1,
+    per_page: Annotated[int, Field(description="Tasks per page (default: 50)")] = 50,
     expand: Annotated[Optional[List[str]], Field(description=(
         "Fields to expand. Valid: subtasks, comments, reactions, buckets, comment_count, is_unread. "
         "This endpoint often returns more metadata (like descriptions) by default."
     ))] = None
 ) -> str:
-    """
-    List tasks for a specific project view. 
-    This is often the most comprehensive way to list tasks with descriptions and full metadata in bulk.
-    """
+    """List tasks for a specific project view."""
     async with get_client() as client:
         params = {"page": page, "per_page": per_page}
         if expand:
@@ -231,8 +211,9 @@ async def list_project_view_tasks(
             bucket = f" [Bucket: {bucket_title}]" if bucket_title else ""
             
             line = f"ID: {t.id} {status} {t.title}{due}{labels}{assignees}{bucket}"
-            if t.description:
-                line += f"\n  Desc: {t.description.replace('\n', '\n  ')}"
+            if include_descriptions and t.description:
+                desc_indented = t.description.replace('\n', '\n  ')
+                line += f"\n  Desc: {desc_indented}"
             return line
 
         for t in all_tasks:
@@ -242,16 +223,13 @@ async def list_project_view_tasks(
 
 @mcp.tool()
 async def get_task(
-    task_id: int,
+    task_id: Annotated[int, Field(description="The ID of the task to fetch")],
     expand: Annotated[Optional[List[str]], Field(description=(
         "Fields to expand for full details. Valid: subtasks, comments, attachments, reminders, assignees, reactions, buckets. "
         "Use this for a deep-dive into a single task."
     ))] = None
 ) -> str:
-    """
-    Get the full details of a specific task, including its description, recurrence, and all metadata.
-    Use this for fetching 'attachments', 'reminders', and 'assignees' which are unavailable in list_tasks().
-    """
+    """Get the full details of a specific task, including its description, recurrence, and all metadata."""
     async with get_client() as client:
         # 1. Try with expansion
         params = {}
@@ -330,24 +308,15 @@ async def get_task(
 
 @mcp.tool()
 async def create_task(
-    title: str, 
-    project_id: int, 
-    description: Optional[str] = None,
-    due_date: Optional[str] = None,
-    priority: Optional[int] = None,
-    labels: Optional[List[int]] = None,
-    recurrence: Optional[dict] = None
+    title: Annotated[str, Field(description="Task title")],
+    project_id: Annotated[int, Field(description="ID of the project")],
+    description: Annotated[Optional[str], Field(description="Optional markdown description")] = None,
+    due_date: Annotated[Optional[str], Field(description="Natural language or ISO date string (e.g., 'tomorrow')")] = None,
+    priority: Annotated[Optional[int], Field(description="Integer 1-5 (5 is highest)")] = None,
+    labels: Annotated[Optional[List[int]], Field(description="List of label IDs to attach")] = None,
+    recurrence: Annotated[Optional[dict], Field(description='Optional dict with {"frequency": "daily|weekly|monthly|yearly", "interval": int}')] = None
 ) -> str:
-    """
-    Create a new task in a specific project.
-    - title: Task title
-    - project_id: ID of the project
-    - description: Optional markdown description
-    - due_date: Natural language or ISO date string (e.g., "tomorrow", "2026-05-08T00:00:00Z")
-    - priority: Integer 1-5 (5 is highest)
-    - labels: List of label IDs to attach
-    - recurrence: Optional dict with {"frequency": "daily|weekly|monthly|yearly", "interval": int}
-    """
+    """Create a new task in a specific project."""
     async with get_client() as client:
         payload = {"title": title}
         if description is not None: payload["description"] = description
@@ -382,9 +351,7 @@ async def create_task(
 
 @mcp.tool()
 async def list_projects() -> str:
-    """
-    List all available projects.
-    """
+    """List all available projects."""
     async with get_client() as client:
         data = await client.request("GET", "/projects")
         
@@ -400,9 +367,7 @@ async def list_projects() -> str:
 
 @mcp.tool()
 async def list_labels() -> str:
-    """
-    List all available labels.
-    """
+    """List all available labels."""
     async with get_client() as client:
         data = await client.request("GET", "/labels")
         
@@ -417,13 +382,12 @@ async def list_labels() -> str:
         return "\n".join(result) if result else "No labels found."
 
 @mcp.tool()
-async def create_label(title: str, hex_color: Optional[str] = None, description: Optional[str] = None) -> str:
-    """
-    Create a new label.
-    - title: The name of the label.
-    - hex_color: The color of the label in #RRGGBB format.
-    - description: A description for the label.
-    """
+async def create_label(
+    title: Annotated[str, Field(description="The name of the label")],
+    hex_color: Annotated[Optional[str], Field(description="The color of the label in #RRGGBB format")] = None,
+    description: Annotated[Optional[str], Field(description="A description for the label")] = None
+) -> str:
+    """Create a new label."""
     async with get_client() as client:
         payload = {"title": title}
         if hex_color:
@@ -441,26 +405,15 @@ async def create_label(title: str, hex_color: Optional[str] = None, description:
 
 @mcp.tool()
 async def update_task(
-    task_id: int, 
-    title: Optional[str] = None,
-    description: Optional[str] = None,
-    due_date: Optional[str] = None,
-    priority: Optional[int] = None,
-    labels: Optional[List[int]] = None,
-    recurrence: Optional[dict] = None
+    task_id: Annotated[int, Field(description="The ID of the task to update")],
+    title: Annotated[Optional[str], Field(description="New title for the task")] = None,
+    description: Annotated[Optional[str], Field(description="New markdown description for the task")] = None,
+    due_date: Annotated[Optional[str], Field(description="Natural language or ISO date string (e.g., 'tomorrow')")] = None,
+    priority: Annotated[Optional[int], Field(description="Integer 1-5 (5 is highest)")] = None,
+    labels: Annotated[Optional[List[int]], Field(description="List of label IDs to set (overwrites existing)")] = None,
+    recurrence: Annotated[Optional[dict], Field(description='Optional dict with {"frequency": "daily|weekly|monthly|yearly", "interval": int}')] = None
 ) -> str:
-    """
-    Update a task's fields.
-    - task_id: The ID of the task to update.
-    - title: New title for the task.
-    - description: New markdown description for the task.
-    - due_date: Natural language or ISO date string (e.g., "tomorrow").
-    - priority: Integer 1-5 (5 is highest).
-    - labels: List of label IDs to set (overwrites existing).
-    - recurrence: Optional dict with {"frequency": "daily|weekly|monthly|yearly", "interval": int}
-    To mark a task as done, use complete_task(task_id).
-    To mark a task as incomplete, use mark_task_incomplete(task_id).
-    """
+    """Update a task's fields. To mark as done/incomplete, use complete_task or mark_task_incomplete."""
     async with get_client() as client:
         payload = {}
         if title is not None: payload["title"] = title
@@ -495,10 +448,8 @@ async def update_task(
         return f"Successfully updated task {task_id}."
 
 @mcp.tool()
-async def complete_task(task_id: int) -> str:
-    """
-    Mark a task as completed (done = true).
-    """
+async def complete_task(task_id: Annotated[int, Field(description="The ID of the task to mark as completed")]) -> str:
+    """Mark a task as completed (done = true)."""
     async with get_client() as client:
         payload = {"done": True}
         data = await client.request("POST", f"/tasks/{task_id}", json=payload)
@@ -507,10 +458,8 @@ async def complete_task(task_id: int) -> str:
         return f"Task {task_id} marked as completed."
 
 @mcp.tool()
-async def mark_task_incomplete(task_id: int) -> str:
-    """
-    Mark a task as incomplete (done = false).
-    """
+async def mark_task_incomplete(task_id: Annotated[int, Field(description="The ID of the task to mark as incomplete")]) -> str:
+    """Mark a task as incomplete (done = false)."""
     async with get_client() as client:
         payload = {"done": False}
         data = await client.request("POST", f"/tasks/{task_id}", json=payload)
@@ -519,10 +468,8 @@ async def mark_task_incomplete(task_id: int) -> str:
         return f"Task {task_id} marked as incomplete."
 
 @mcp.tool()
-async def delete_task(task_id: int) -> str:
-    """
-    Delete a task.
-    """
+async def delete_task(task_id: Annotated[int, Field(description="The ID of the task to delete")]) -> str:
+    """Delete a task."""
     async with get_client() as client:
         data = await client.request("DELETE", f"/tasks/{task_id}")
         if isinstance(data, dict) and "error" in data:
@@ -530,11 +477,11 @@ async def delete_task(task_id: int) -> str:
         return f"Successfully deleted task {task_id}."
 
 @mcp.tool()
-async def add_subtask(parent_task_id: int, subtask_task_id: int) -> str:
-    """
-    Explicitly make one task a subtask of another.
-    Direction: subtask_task_id becomes a child of parent_task_id.
-    """
+async def add_subtask(
+    parent_task_id: Annotated[int, Field(description="The ID of the parent task")],
+    subtask_task_id: Annotated[int, Field(description="The ID of the task that will become a subtask")]
+) -> str:
+    """Explicitly make one task a subtask of another."""
     async with get_client() as client:
         payload = {"other_task_id": subtask_task_id, "relation_kind": "subtask"}
         data = await client.request("PUT", f"/tasks/{parent_task_id}/relations", json=payload)
@@ -543,11 +490,12 @@ async def add_subtask(parent_task_id: int, subtask_task_id: int) -> str:
         return f"Task {subtask_task_id} is now a subtask of {parent_task_id}."
 
 @mcp.tool()
-async def add_task_link(task_id: int, other_task_id: int, link_type: str = "related") -> str:
-    """
-    Link two tasks together with a specific relationship type.
-    link_type can be: related, duplicate, blocked, blocking, predecessor, successor.
-    """
+async def add_task_link(
+    task_id: Annotated[int, Field(description="The source task ID")],
+    other_task_id: Annotated[int, Field(description="The target task ID")],
+    link_type: Annotated[str, Field(description="Link type (related, duplicate, blocked, blocking, predecessor, successor)")] = "related"
+) -> str:
+    """Link two tasks together with a specific relationship type."""
     async with get_client() as client:
         payload = {"other_task_id": other_task_id, "relation_kind": link_type}
         data = await client.request("PUT", f"/tasks/{task_id}/relations", json=payload)
@@ -557,9 +505,7 @@ async def add_task_link(task_id: int, other_task_id: int, link_type: str = "rela
 
 @mcp.tool()
 async def list_filters() -> str:
-    """
-    List all saved filters.
-    """
+    """List all saved filters."""
     async with get_client() as client:
         data = await client.request("GET", "/filters")
         if isinstance(data, dict) and "error" in data:
@@ -569,10 +515,8 @@ async def list_filters() -> str:
         return "\n".join(result) if result else "No filters found."
 
 @mcp.tool()
-async def search_tasks(query: str) -> str:
-    """
-    Search for tasks globally across all projects using a search string.
-    """
+async def search_tasks(query: Annotated[str, Field(description="Search string to match task titles")]) -> str:
+    """Search for tasks globally across all projects."""
     async with get_client() as client:
         # Strip extra quotes if provided (Consistency fix)
         clean_query = query.strip('"\'')
@@ -590,10 +534,11 @@ async def search_tasks(query: str) -> str:
         return "\n".join(result) if result else f"No tasks found matching '{query}'."
 
 @mcp.tool()
-async def add_task_comment(task_id: int, comment: str) -> str:
-    """
-    Add a comment to a task. Useful for leaving status updates or notes.
-    """
+async def add_task_comment(
+    task_id: Annotated[int, Field(description="The ID of the task to comment on")],
+    comment: Annotated[str, Field(description="The markdown comment text")]
+) -> str:
+    """Add a comment to a task."""
     async with get_client() as client:
         data = await client.request("PUT", f"/tasks/{task_id}/comments", json={"comment": comment})
         if isinstance(data, dict) and "error" in data:
@@ -601,10 +546,8 @@ async def add_task_comment(task_id: int, comment: str) -> str:
         return f"Successfully added comment to task {task_id}."
 
 @mcp.tool()
-async def list_task_comments(task_id: int) -> str:
-    """
-    List all comments on a task.
-    """
+async def list_task_comments(task_id: Annotated[int, Field(description="The ID of the task")]) -> str:
+    """List all comments on a task."""
     async with get_client() as client:
         data = await client.request("GET", f"/tasks/{task_id}/comments")
         if isinstance(data, dict) and "error" in data:
@@ -621,10 +564,11 @@ async def list_task_comments(task_id: int) -> str:
         return "\n".join(result)
 
 @mcp.tool()
-async def add_label_to_task(task_id: int, label_id: int) -> str:
-    """
-    Link an existing label to a task.
-    """
+async def add_label_to_task(
+    task_id: Annotated[int, Field(description="The ID of the task")],
+    label_id: Annotated[int, Field(description="The ID of the label to add")]
+) -> str:
+    """Link an existing label to a task."""
     async with get_client() as client:
         data = await client.request("PUT", f"/tasks/{task_id}/labels", json={"label_id": label_id})
         if isinstance(data, dict) and "error" in data:
@@ -632,11 +576,11 @@ async def add_label_to_task(task_id: int, label_id: int) -> str:
         return f"Successfully added label {label_id} to task {task_id}."
 
 @mcp.tool()
-async def setup_new_project(title: str, tasks: List[str]) -> str:
-    """
-    Create a new project and multiple tasks within it in a single operation.
-    Reduces multi-turn overhead.
-    """
+async def setup_new_project(
+    title: Annotated[str, Field(description="The title of the new project")],
+    tasks: Annotated[List[str], Field(description="List of task titles to create in the project")]
+) -> str:
+    """Create a new project and multiple tasks in one operation."""
     async with get_client() as client:
         # 1. Create Project
         proj_data = await client.request("PUT", "/projects", json={"title": title})
@@ -657,11 +601,8 @@ async def setup_new_project(title: str, tasks: List[str]) -> str:
         return "\n".join(results)
 
 @mcp.tool()
-async def parse_date(date_string: str) -> str:
-    """
-    Helper to convert natural language dates (e.g., 'next Friday at 2pm') 
-    into the ISO 8601 format required by the Vikunja API.
-    """
+async def parse_date(date_string: Annotated[str, Field(description="Natural language date (e.g., 'next Friday at 2pm')")]) -> str:
+    """Convert natural language dates into ISO 8601 format."""
     dt = dateparser.parse(date_string)
     if not dt:
         return f"Could not parse date: '{date_string}'"
