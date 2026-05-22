@@ -40,7 +40,7 @@ async def list_tasks(
     page: int = 1,
     per_page: int = 20,
     filter: Optional[str] = None,
-    expand: Optional[List[str]] = None,
+    expand: Annotated[Optional[List[str]], Field(description="Fields to expand in the response. Valid options: subtasks, buckets, reactions, comments, comment_count, is_unread, attachments, reminders, assignees. Note: labels are included by default.")] = None,
     sort_by: Optional[List[str]] = None,
     order_by: Optional[str] = None,
 ) -> str:
@@ -50,7 +50,17 @@ async def list_tasks(
     - page: Page number for pagination (default: 1).
     - per_page: Number of tasks per page (default: 20).
     - filter: Vikunja filter string (e.g., 'done = false').
-    - expand: List of fields to expand. Valid options ONLY: ['subtasks', 'buckets', 'reactions', 'comments', 'comment_count', 'is_unread', 'attachments', 'reminders']. Note: labels are included by default.
+    - expand: List of fields to expand.
+        - 'subtasks': Include child tasks.
+        - 'comments': Include all task comments.
+        - 'attachments': Include file attachment metadata.
+        - 'reminders': Include configured reminders.
+        - 'reactions': Include emoji reactions.
+        - 'buckets': Include Kanban bucket information.
+        - 'assignees': Include full user objects for assignees.
+        - 'comment_count': Include numeric count of comments.
+        - 'is_unread': Include unread status for the current user.
+      Note: labels are included by default.
     - sort_by: List of fields to sort by (e.g., ['due_date', 'priority']).
     - order_by: Sort order, 'asc' or 'desc' (default: 'asc').
     """
@@ -64,7 +74,7 @@ async def list_tasks(
             params["filter"] = filter.strip('"\'')
         if expand:
             # Filter out invalid expand fields (e.g., 'labels' which is included by default)
-            valid_expands = {"subtasks", "buckets", "reactions", "comments", "comment_count", "is_unread", "attachments", "reminders"}
+            valid_expands = {"subtasks", "buckets", "reactions", "comments", "comment_count", "is_unread", "attachments", "reminders", "assignees"}
             valid_requested = [e for e in expand if e in valid_expands]
             if valid_requested:
                 params["expand"] = valid_requested

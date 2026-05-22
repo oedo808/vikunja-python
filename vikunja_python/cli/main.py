@@ -35,7 +35,15 @@ def list_tasks(
     page: int = typer.Option(1, help="Page number"),
     per_page: int = typer.Option(20, help="Items per page"),
     filter: Optional[str] = typer.Option(None, help="Vikunja filter string"),
-    expand: Optional[List[str]] = typer.Option(None, help="Valid options ONLY: subtasks, buckets, reactions, comments, comment_count, is_unread, attachments, reminders")
+    expand: Optional[List[str]] = typer.Option(
+        None, 
+        help=(
+            "Fields to expand: 'subtasks' (child tasks), 'comments' (full comments), "
+            "'attachments' (file metadata), 'reminders' (reminders), 'reactions' (emojis), "
+            "'buckets' (Kanban data), 'comment_count' (count), 'is_unread' (unread status). "
+            "Note: labels are included by default."
+        )
+    )
 ):
     """List all tasks with pagination and optional filtering."""
     async def _list():

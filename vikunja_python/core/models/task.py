@@ -230,7 +230,19 @@ class TaskListRequest(VikunjaBaseModel):
     # Expansion (fetch nested objects)
     expand: Optional[list[str]] = Field(
         None, 
-        description="Expand nested objects. Valid options ONLY: subtasks, buckets, reactions, comments, comment_count, is_unread, attachments, reminders"
+        description=(
+            "Expand nested objects to include full metadata instead of just IDs. "
+            "Valid options: "
+            "subtasks (include child tasks), "
+            "comments (include all task comments), "
+            "attachments (include file metadata), "
+            "reminders (include task reminders), "
+            "reactions (include emoji reactions), "
+            "buckets (include Kanban bucket info), "
+            "assignees (include full user objects for assignees), "
+            "comment_count (include numeric count of comments), "
+            "is_unread (include unread status for current user)."
+        )
     )
 
 
