@@ -77,3 +77,40 @@ async def test_pagination_integration(async_client):
     # Check headers for pagination info (as defined in base.py/task.py)
     assert "x-pagination-total-pages" in list_resp.headers
     assert int(list_resp.headers["x-pagination-total-pages"]) >= 2
+
+@pytest.mark.asyncio
+async def test_expand_parameter_sanitization(async_client, vikunja_auth):
+    """
+    Verify that the MCP list_tasks tool correctly sanitizes the expand parameter
+    to prevent 412 Precondition Failed errors from the Vikunja API.
+    """
+    # 1. Create a Project
+    proj_resp = await async_client.put("/projects", json={"title": "Expand Test Project"})
+    assert proj_resp.status_code in [200, 201]
+    project_id = proj_resp.json()["id"]
+    
+    # 2. Call the raw API with an invalid expand parameter to prove it fails (412)
+    raw_resp = await async_client.get("/tasks", params={"expand": ["labels", "invalid_field"]})
+    assert raw_resp.status_code == 412
+    
+    # 3. Import and call the MCP tool function directly to test its sanitization logic
+    from vikunja_python.mcp.server import list_tasks
+    import os
+    
+    # Set env vars temporarily for the tool's get_client() call
+    os.environ["VIKUNJA_URL"] = vikunja_auth["base_url"]
+    os.environ["VIKUNJA_API_TOKEN"] = vikunja_auth["token"]
+    
+    # Call tool with invalid 'labels' and valid 'subtasks'
+    # The tool should filter out 'labels' and send only 'subtasks', returning 200 OK.
+    result = await list_tasks(project_id=project_id, expand=["labels", "subtasks"])
+    
+    # If it failed with 412, result would start with "Error fetching tasks: 412" or similar
+    assert "Error fetching tasks" not in result
+    assert "No tasks found" in result or "ID:" in result # Should succeed (return empty string or tasks)
+    
+    # 4. Call tool with ONLY invalid params
+    # The tool should filter all out and send no expand param at all, returning 200 OK.
+    result2 = await list_tasks(project_id=project_id, expand=["labels", "invalid_field"])
+    assert "Error fetching tasks" not in result2
+    assert "No tasks found" in result2 or "ID:" in result2
