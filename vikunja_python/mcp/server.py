@@ -122,12 +122,80 @@ async def list_tasks(
         return "\n".join(result)
 
 @mcp.tool()
-async def create_task(title: str, project_id: int) -> str:
+async def get_task(task_id: int) -> str:
+    """
+    Get the full details of a specific task, including its description and recurrence.
+    """
+    async with get_client() as client:
+        data = await client.request("GET", f"/tasks/{task_id}")
+        if isinstance(data, dict) and "error" in data:
+            return f"Error fetching task: {data['error']}"
+        
+        t = Task(**data)
+        
+        lines = []
+        status = "[DONE]" if t.done else "[TODO]"
+        lines.append(f"ID: {t.id} {status} {t.title}")
+        lines.append(f"Project ID: {t.project_id}")
+        if t.due_date: lines.append(f"Due: {t.due_date.isoformat()}")
+        if t.priority > 0: lines.append(f"Priority: {t.priority}")
+        if t.labels: lines.append(f"Labels: {', '.join(l.title for l in t.labels)}")
+        
+        # Recurrence
+        if t.repeat_after > 0:
+            lines.append(f"Recurrence: repeats after {t.repeat_after} seconds (Mode: {t.repeat_mode})")
+            
+        if t.description:
+            lines.append("\n--- Description ---")
+            lines.append(t.description)
+            lines.append("-------------------")
+            
+        return "\n".join(lines)
+
+@mcp.tool()
+async def create_task(
+    title: str, 
+    project_id: int, 
+    description: Optional[str] = None,
+    due_date: Optional[str] = None,
+    priority: Optional[int] = None,
+    labels: Optional[List[int]] = None,
+    recurrence: Optional[dict] = None
+) -> str:
     """
     Create a new task in a specific project.
+    - title: Task title
+    - project_id: ID of the project
+    - description: Optional markdown description
+    - due_date: Natural language or ISO date string (e.g., "tomorrow", "2026-05-08T00:00:00Z")
+    - priority: Integer 1-5 (5 is highest)
+    - labels: List of label IDs to attach
+    - recurrence: Optional dict with {"frequency": "daily|weekly|monthly|yearly", "interval": int}
     """
     async with get_client() as client:
         payload = {"title": title}
+        if description is not None: payload["description"] = description
+        if priority is not None: payload["priority"] = priority
+        if labels is not None: payload["label_ids"] = labels
+        if due_date is not None:
+            dt = dateparser.parse(due_date)
+            if dt:
+                payload["due_date"] = dt.isoformat()
+
+        if recurrence:
+            freq = recurrence.get("frequency", "").lower()
+            interval = recurrence.get("interval", 1)
+            # Rough mapping to seconds for Vikunja repeat_after
+            multiplier = 0
+            if freq == "daily": multiplier = 86400
+            elif freq == "weekly": multiplier = 604800
+            elif freq == "monthly": multiplier = 2592000 # 30 days
+            elif freq == "yearly": multiplier = 31536000 # 365 days
+            
+            if multiplier > 0:
+                payload["repeat_after"] = multiplier * interval
+                payload["repeat_mode"] = 0 # 0/1 usually means repeat after due date
+
         data = await client.request("PUT", f"/projects/{project_id}/tasks", json=payload)
         
         if isinstance(data, dict) and "error" in data:
@@ -196,19 +264,55 @@ async def create_label(title: str, hex_color: Optional[str] = None, description:
         return f"Successfully created label '{label.title}' with ID {label.id}."
 
 @mcp.tool()
-async def update_task(task_id: int, title: Optional[str] = None) -> str:
+async def update_task(
+    task_id: int, 
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    due_date: Optional[str] = None,
+    priority: Optional[int] = None,
+    labels: Optional[List[int]] = None,
+    recurrence: Optional[dict] = None
+) -> str:
     """
-    Update a task's title.
+    Update a task's fields.
     - task_id: The ID of the task to update.
     - title: New title for the task.
+    - description: New markdown description for the task.
+    - due_date: Natural language or ISO date string (e.g., "tomorrow").
+    - priority: Integer 1-5 (5 is highest).
+    - labels: List of label IDs to set (overwrites existing).
+    - recurrence: Optional dict with {"frequency": "daily|weekly|monthly|yearly", "interval": int}
     To mark a task as done, use complete_task(task_id).
     To mark a task as incomplete, use mark_task_incomplete(task_id).
     """
     async with get_client() as client:
-        if title is None:
-            return "No changes provided for update_task. Provide 'title'."
+        payload = {}
+        if title is not None: payload["title"] = title
+        if description is not None: payload["description"] = description
+        if priority is not None: payload["priority"] = priority
+        if labels is not None: payload["label_ids"] = labels
+        if due_date is not None:
+            dt = dateparser.parse(due_date)
+            if dt:
+                payload["due_date"] = dt.isoformat()
 
-        payload = {"title": title}
+        if recurrence:
+            freq = recurrence.get("frequency", "").lower()
+            interval = recurrence.get("interval", 1)
+            # Rough mapping to seconds for Vikunja repeat_after
+            multiplier = 0
+            if freq == "daily": multiplier = 86400
+            elif freq == "weekly": multiplier = 604800
+            elif freq == "monthly": multiplier = 2592000 # 30 days
+            elif freq == "yearly": multiplier = 31536000 # 365 days
+            
+            if multiplier > 0:
+                payload["repeat_after"] = multiplier * interval
+                payload["repeat_mode"] = 0 # 0/1 usually means repeat after due date
+
+        if not payload:
+            return "No changes provided for update_task."
+
         data = await client.request("POST", f"/tasks/{task_id}", json=payload)
         if isinstance(data, dict) and "error" in data:
             return f"Error updating task: {data['error']}"

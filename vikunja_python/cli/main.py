@@ -104,11 +104,40 @@ def list_projects():
     asyncio.run(_list())
 
 @app.command()
-def create_task(title: str, project_id: int):
+def create_task(
+    title: str, 
+    project_id: int,
+    description: Optional[str] = typer.Option(None, help="Markdown description"),
+    due_date: Optional[str] = typer.Option(None, help="Due date (e.g., 'tomorrow')"),
+    priority: Optional[int] = typer.Option(None, help="Priority 1-5"),
+    labels: Optional[List[int]] = typer.Option(None, help="Label IDs to attach"),
+    recurrence_freq: Optional[str] = typer.Option(None, help="daily, weekly, monthly, yearly"),
+    recurrence_interval: int = typer.Option(1, help="Interval for recurrence")
+):
     """Create a new task in a project."""
+    import dateparser
     async def _create():
         async with get_client() as client:
             payload = {"title": title}
+            if description is not None: payload["description"] = description
+            if priority is not None: payload["priority"] = priority
+            if labels: payload["label_ids"] = labels
+            if due_date is not None:
+                dt = dateparser.parse(due_date)
+                if dt: payload["due_date"] = dt.isoformat()
+
+            if recurrence_freq:
+                freq = recurrence_freq.lower()
+                multiplier = 0
+                if freq == "daily": multiplier = 86400
+                elif freq == "weekly": multiplier = 604800
+                elif freq == "monthly": multiplier = 2592000
+                elif freq == "yearly": multiplier = 31536000
+                
+                if multiplier > 0:
+                    payload["repeat_after"] = multiplier * recurrence_interval
+                    payload["repeat_mode"] = 0
+
             data = await client.request("PUT", f"/projects/{project_id}/tasks", json=payload)
             
             if isinstance(data, dict) and "error" in data:
@@ -154,11 +183,44 @@ def delete_task(task_id: int):
     asyncio.run(_delete())
 
 @app.command()
-def update_task(task_id: int, title: str = typer.Option(..., help="New title")):
-    """Update a task's title. Use complete-task or mark-task-incomplete for status changes."""
+def update_task(
+    task_id: int, 
+    title: Optional[str] = typer.Option(None, help="New title"),
+    description: Optional[str] = typer.Option(None, help="New description"),
+    due_date: Optional[str] = typer.Option(None, help="New due date"),
+    priority: Optional[int] = typer.Option(None, help="New priority 1-5"),
+    labels: Optional[List[int]] = typer.Option(None, help="New label IDs"),
+    recurrence_freq: Optional[str] = typer.Option(None, help="daily, weekly, monthly, yearly"),
+    recurrence_interval: int = typer.Option(1, help="Interval for recurrence")
+):
+    """Update a task's fields. Use complete-task or mark-task-incomplete for status changes."""
+    import dateparser
     async def _update():
         async with get_client() as client:
-            payload = {"title": title}
+            payload = {}
+            if title is not None: payload["title"] = title
+            if description is not None: payload["description"] = description
+            if priority is not None: payload["priority"] = priority
+            if labels is not None: payload["label_ids"] = labels
+            if due_date is not None:
+                dt = dateparser.parse(due_date)
+                if dt: payload["due_date"] = dt.isoformat()
+
+            if recurrence_freq:
+                freq = recurrence_freq.lower()
+                multiplier = 0
+                if freq == "daily": multiplier = 86400
+                elif freq == "weekly": multiplier = 604800
+                elif freq == "monthly": multiplier = 2592000
+                elif freq == "yearly": multiplier = 31536000
+                
+                if multiplier > 0:
+                    payload["repeat_after"] = multiplier * recurrence_interval
+                    payload["repeat_mode"] = 0
+
+            if not payload:
+                rprint("[bold yellow]No changes provided.[/bold yellow] Provide a field to update.")
+                return
 
             data = await client.request("POST", f"/tasks/{task_id}", json=payload)
             if isinstance(data, dict) and "error" in data:
