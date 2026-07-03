@@ -70,7 +70,14 @@ async def list_tasks(
         if order_by:
             params["order_by"] = order_by
 
-        path = "/tasks" if project_id is None else f"/projects/{project_id}/tasks"
+        # Negative project_id = saved filter (e.g. -2 = "Due in 3 Days")
+        if project_id is None:
+            path = "/tasks"
+        elif project_id < 0:
+            path = "/tasks"
+            params["project_id"] = project_id
+        else:
+            path = f"/projects/{project_id}/tasks"
         data = await client.request("GET", path, params=params)
         
         if isinstance(data, dict) and "error" in data:
@@ -134,6 +141,61 @@ async def list_tasks(
             result.append(format_task(t))
         
         return "\n".join(result)
+
+@mcp.tool()
+async def list_saved_filter(
+    filter_id: Annotated[int, Field(description="Daily briefing saved filter ID (negative)")],
+    include_descriptions: Annotated[bool, Field(description="Include descriptions")] = True,
+    page: Annotated[int, Field(description="Page number")] = 1,
+    per_page: Annotated[int, Field(description="Tasks per page")] = 50,
+) -> str:
+    """List tasks from a saved filter in Vikunja (e.g., filter_id=-2 for Due in 3 Days)."""
+    async with get_client() as client:
+        params = {"page": page, "per_page": per_page, "project_id": filter_id}
+        data = await client.request("GET", "/tasks", params=params)
+        if isinstance(data, dict) and "error" in data:
+            return f"Error fetching saved filter: {data['error']}"
+        if not data:
+            return "No tasks found."
+        tasks = [Task(**item) for item in data]
+        lines = []
+        for t in tasks:
+            status = "[DONE]" if t.done else "[TODO]"
+            due = f" (Due: {t.due_date.strftime('%Y-%m-%d %H:%M')})" if t.due_date else ""
+            labels = f" [Labels: {', '.join(l.title for l in t.labels)}]" if t.labels else ""
+            line = f"ID: {t.id} {status} {t.title}{due}{labels}"
+            if include_descriptions and t.description:
+                line += f"\n  Desc: {t.description.replace(chr(10), chr(10)+'  ')}"
+            lines.append(line)
+        return "\n".join(lines)
+
+@mcp.tool()
+async def task_summary(
+    top_n: Annotated[int, Field(description="How many top tasks to show per filter (default: 5)")] = 5,
+) -> str:
+    """Quick dashboard summary — task counts and top tasks for overdue, due today, and due soon.
+    Uses parallel queries for minimal latency. Optimized for ePaper dashboard polling."""
+    async with get_client() as client:
+        summary = await client.get_dashboard_summary()
+        lines = [f"## Vikunja Task Summary ({summary['total']} urgent)"]
+        for section in ["overdue", "due_today", "due_soon"]:
+            s = summary["filters"].get(section, {})
+            label_map = {"overdue": "🔴 Overdue", "due_today": "🟡 Due Today", "due_soon": "🟢 Due in 3 Days"}
+            label = label_map.get(section, section)
+            lines.append(f"\n### {label} ({s.get('count', 0)})")
+            for t in s.get("tasks", [])[:top_n]:
+                due = t.get("due_date", "")
+                if due and due.startswith("0001"):
+                    due = ""
+                elif due and len(due) > 10:
+                    due = due[:10]
+                priority = f" P{t['priority']}" if t.get("priority", 0) > 0 else ""
+                lines.append(f"- #{t['id']} {t['title']}{priority}"
+                             f"{'  (' + due + ')' if due else ''}")
+            if not s.get("tasks"):
+                lines.append("  _None_ 🎉")
+        return "\n".join(lines)
+
 
 @mcp.tool()
 async def get_project(project_id: Annotated[int, Field(description="The ID of the project to fetch")]) -> str:
