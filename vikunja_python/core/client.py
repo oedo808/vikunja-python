@@ -40,10 +40,14 @@ class VikunjaClient:
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
+        # Respect SSL_CERT_FILE explicitly — more reliable than relying on
+        # certifi's env-var propagation which can be lost in subprocess spawns.
+        verify = os.environ.get("SSL_CERT_FILE") or os.environ.get("REQUESTS_CA_BUNDLE") or True
         self.client = httpx.AsyncClient(
             base_url=self.base_url,
             headers=headers,
-            timeout=30.0
+            timeout=30.0,
+            verify=verify,
         )
 
     async def __aenter__(self):
@@ -70,3 +74,33 @@ class VikunjaClient:
             return error_data
         except Exception as e:
             return {"error": str(e), "status_code": 500}
+
+    async def get_dashboard_summary(self) -> dict:
+        """Quick polling summary for ePaper dashboard. Queries saved filters in parallel."""
+        filters = {
+            "overdue": -3,
+            "due_today": -4,
+            "due_soon": -2,
+        }
+        import asyncio
+        async def fetch(label: str, filter_id: int) -> dict:
+            data = await self.request("GET", "/tasks", params={
+                "page": 1, "per_page": 10, "project_id": filter_id
+            })
+            if isinstance(data, dict) and "error" in data:
+                return {"label": label, "count": 0, "tasks": [], "error": data["error"]}
+            tasks = data if isinstance(data, list) else []
+            return {
+                "label": label,
+                "count": len(tasks),
+                "tasks": [
+                    {"id": t.get("id"), "title": t.get("title"),
+                     "due_date": t.get("due_date"), "priority": t.get("priority", 0)}
+                    for t in tasks[:10]
+                ]
+            }
+        results = await asyncio.gather(*[
+            fetch(label, fid) for label, fid in filters.items()
+        ])
+        total = sum(r["count"] for r in results)
+        return {"total": total, "filters": {r["label"]: r for r in results}}

@@ -47,7 +47,13 @@ def list_tasks(
             if filter: params["filter"] = filter
             if expand: params["expand"] = expand
             
-            path = "/tasks" if project_id is None else f"/projects/{project_id}/tasks"
+            if project_id is None:
+                path = "/tasks"
+            elif project_id < 0:
+                path = "/tasks"
+                params["project_id"] = project_id
+            else:
+                path = f"/projects/{project_id}/tasks"
             data = await client.request("GET", path, params=params)
             
             if isinstance(data, dict) and "error" in data:
@@ -79,6 +85,63 @@ def list_tasks(
             console.print(table)
 
     asyncio.run(_list())
+
+@app.command()
+def list_saved_filter(
+    filter_id: int = typer.Option(..., "--filter-id", "-f", help="Saved filter ID (negative, e.g., -2 for Due in 3 Days, -3 Overdue, -4 Due Today)"),
+    page: int = typer.Option(1, help="Page number"),
+    per_page: int = typer.Option(50, help="Items per page"),
+):
+    """List tasks from a saved filter."""
+    async def _list():
+        async with get_client() as client:
+            params = {"page": page, "per_page": per_page, "project_id": filter_id}
+            data = await client.request("GET", "/tasks", params=params)
+            if isinstance(data, dict) and "error" in data:
+                rprint(f"[bold red]Error:[/bold red] {data['error']}")
+                return
+
+            table = Table(title=f"Saved Filter {filter_id}")
+            table.add_column("ID", style="cyan", no_wrap=True)
+            table.add_column("Status", width=6)
+            table.add_column("Title", style="magenta")
+            table.add_column("Due Date", style="yellow")
+            table.add_column("Labels", style="blue")
+
+            tasks = [Task(**item) for item in data]
+            for t in tasks:
+                status = "[green]DONE[/green]" if t.done else "[yellow]TODO[/yellow]"
+                due = t.due_date.strftime("%Y-%m-%d %H:%M") if t.due_date else ""
+                labels = ", ".join(l.title for l in t.labels) if t.labels else ""
+                table.add_row(str(t.id), status, t.title, due, labels)
+
+            console.print(table)
+    asyncio.run(_list())
+
+@app.command()
+def summary(
+    top_n: int = typer.Option(5, "--top", "-t", help="Number of top tasks to show per filter"),
+):
+    """Quick dashboard summary — counts and top tasks for overdue, due today, due soon."""
+    async def _summary():
+        async with get_client() as client:
+            data = await client.get_dashboard_summary()
+            rprint(f"[bold white]Vikunja Task Summary: {data['total']} urgent[/bold white]")
+            for section in ["overdue", "due_today", "due_soon"]:
+                s = data["filters"].get(section, {})
+                labels = {"overdue": "🔴 Overdue", "due_today": "🟡 Due Today", "due_soon": "🟢 Due in 3 Days"}
+                rprint(f"\n[bold]{labels.get(section, section)} ({s.get('count', 0)})[/bold]")
+                for t in s.get("tasks", [])[:top_n]:
+                    due = t.get("due_date", "")
+                    if due and due.startswith("0001"):
+                        due = ""
+                    elif due and len(due) > 10:
+                        due = due[:10]
+                    due_str = f" ({due})" if due else ""
+                    rprint(f"  #{t['id']} {t['title']}{due_str}")
+                if not s.get("tasks"):
+                    rprint("  [dim]None 🎉[/dim]")
+    asyncio.run(_summary())
 
 @app.command()
 def get_project(project_id: int):
